@@ -73,19 +73,15 @@ Manage your Text and Word settings <?php echo $__env->renderComponent(); ?>
             <div class="p-4 font-bold text-gray-700 border-b">
                 Users
             </div>
-            <div class="divide-y" wire:poll.5s="refreshUsers">
+            <div class="divide-y">
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $users; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $user): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                     <div wire:click="selectUser(<?php echo e($user->id); ?>)" class="p-3 cursor-pointer hover:bg-blue-100 transition
                     <?php echo e($selectedUser && $selectedUser->id === $user->id ? 'bg-blue-200' : ''); ?>">
                         <div class="flex items-center gap-2">
                             
-                            <span class="w-2 h-2 rounded-full <?php echo e($user->last_seen && $user->last_seen->gt(now()->subMinutes(1)) ? 'bg-green-500' : 'bg-gray-300'); ?>"></span>
+                            <span class="w-2 h-2 rounded-full <?php echo e(in_array($user->id, $onlineUsers) ? 'bg-green-500' : 'bg-gray-300'); ?>"></span>
                             <div class="text-gray-800"><?php echo e($user->name); ?></div>
                         </div>
-                        <!-- <div class="text-xs text-gray-500 ml-4">
-                            <?php echo e($user->email); ?>
-
-                        </div> -->
                     </div>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
             </div>
@@ -99,10 +95,6 @@ Manage your Text and Word settings <?php echo $__env->renderComponent(); ?>
                     <?php echo e($selectedUser->name); ?>
 
                 </div>
-                <!-- <div class="text-xs text-gray-500">
-                    <?php echo e($selectedUser->email); ?>
-
-                </div> -->
             </div>
 
             <!-- Messages -->
@@ -117,35 +109,47 @@ Manage your Text and Word settings <?php echo $__env->renderComponent(); ?>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
             </div>
 
-            <form wire:submit="submit" class="p-4 border-t bg-gray-100 flex items-center gap-2">
+            <form wire:submit.prevent="submit" class="p-4 border-t bg-gray-100 flex items-center gap-2">
                 <input
-                    wire:model="newMessage"
+                    wire:model.live="newMessage"
                     type="text"
                     class="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none text-gray-800"
                     placeholder="Type your message..." />
-                <button type="submit" 
+                <button type="submit"
                     class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-full">
                     Kirim
                 </button>
             </form>
         </div>
     </div>
+
     <script>
-    // Kirim heartbeat setiap 30 detik selama user aktif di halaman ini
-    function sendHeartbeat() {
-        fetch('/update-last-seen', {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': '<?php echo e(csrf_token()); ?>',
-                'Content-Type': 'application/json'
-            }
-        });
-    }
+    document.addEventListener('livewire:initialized', () => {
 
-    // Kirim saat pertama buka
-    sendHeartbeat();
+        // ✅ Presence channel — HANYA untuk online status (jangan listen event disini)
+        window.Echo.join('chat')
+            .here((users) => {
+                window.Livewire.find('<?php echo e($_instance->getId()); ?>').set('onlineUsers', users.map(u => u.id));
+            })
+            .joining((user) => {
+                window.Livewire.find('<?php echo e($_instance->getId()); ?>').call('userJoined', user.id);
+            })
+            .leaving((user) => {
+                window.Livewire.find('<?php echo e($_instance->getId()); ?>').call('userLeft', user.id);
+            });
 
-    // Kirim setiap 30 detik
-    setInterval(sendHeartbeat, 30000);
-</script>
+        // ✅ Private channel — untuk TERIMA pesan realtime
+        window.Echo.private('chat.<?php echo e(auth()->id()); ?>')
+            .listen('MessageSent', (e) => {
+                console.log('pesan masuk:', e);
+                window.Livewire.find('<?php echo e($_instance->getId()); ?>').call('receiveMessage', e);
+            });
+
+            Livewire.on('scroll-bottom', () => {
+                const container = document.querySelector('.overflow-y-auto');
+                if (container) container.scrollTop = container.scrollHeight;
+            });
+
+    });
+    </script>
 </div><?php /**PATH C:\laragon\www\chat-app\resources\views/livewire/chat.blade.php ENDPATH**/ ?>

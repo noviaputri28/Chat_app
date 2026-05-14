@@ -4,7 +4,7 @@ namespace App\Livewire;
 
 use App\Models\User;
 use App\Models\ChatMessage;
-use App\Events\MessageSent;          
+use App\Events\MessageSent;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
@@ -15,15 +15,16 @@ class chat extends Component
     public $newMessage;
     public $messages;
     public $loginID;
+    public array $onlineUsers = [];
 
     public function mount()
     {
-        auth()->user()->update(['last_seen' => now()]);
+        //auth()->user()->update(['last_seen' => now()]);
 
         $this->users = User::whereNot('id', auth()->id())->latest()->get();
         $this->selectedUser = $this->users->first();
         $this->loadMessages();
-        $this->loginID = auth::id();
+        $this->loginID = Auth::id();
     }
 
     public function selectUser($id)
@@ -32,56 +33,60 @@ class chat extends Component
         $this->loadMessages();
     }
 
-    public function refreshUsers()
+    public function loadMessages()
     {
-        $this->users = User::whereNot('id', auth()->id())->latest()->get();
-    }
-
-    public function LoadMessages(){
         $this->messages = ChatMessage::query()
             ->where(function ($q) {
-                $q->where("sender_id", Auth::id())
-                ->where("receiver_id", $this->selectedUser->id);
+                $q->where('sender_id', Auth::id())
+                  ->where('receiver_id', $this->selectedUser->id);
             })
             ->orWhere(function ($q) {
-                $q->where("sender_id", $this->selectedUser->id)
-                ->where("receiver_id", Auth::id());
-            }) ->get();
+                $q->where('sender_id', $this->selectedUser->id)
+                  ->where('receiver_id', Auth::id());
+            })->get();
+    }
+
+    public function receiveMessage(array $data): void
+    {
+        if ((int)$data['sender_id'] === Auth::id()) return;
+
+        if ($this->selectedUser && (int)$data['sender_id'] === $this->selectedUser->id) {
+            $this->loadMessages();
+            $this->dispatch('scroll-bottom'); // ← tambahkan ini
+        }
     }
 
     public function submit()
     {
-        //dd($this->newMessage);
-        if(!$this->newMessage) return;
+        if (!$this->newMessage) return;
 
-        $messages = ChatMessage::create([
-            "sender_id" => Auth::id(),
-            "receiver_id" => $this->selectedUser->id,
-            "message" => $this->newMessage
+        $message = ChatMessage::create([
+            'sender_id'   => Auth::id(),
+            'receiver_id' => $this->selectedUser->id,
+            'message'     => $this->newMessage,
         ]);
 
-        $this->messages->push($messages);
-
+        $message->load('sender');
+        $this->messages->push($message);
         $this->newMessage = '';
 
-        broadcast(new MessageSent($messages));  
-        //$this->loadMessages();
+        broadcast(new MessageSent($message));
     }
 
-    public function getListeners()
+    public function userJoined(int $userId): void
     {
-        return [
-            "echo-private:chat.{$this->loginID},MessageSent" => 'newChatMessageNotification'
-        ];
-    }
-
-    public function newChatMessageNotification($message)
-    {
-        if ($message['sender_id'] == $this->selectedUser->id) {
-            $messageObj = ChatMessage::find($message['id']);
-            $this->messages->push($messageObj);
+        if (!in_array($userId, $this->onlineUsers)) {
+            $this->onlineUsers[] = $userId;
         }
     }
+
+    public function userLeft(int $userId): void
+    {
+        $this->onlineUsers = array_values(
+            array_filter($this->onlineUsers, fn($id) => $id !== $userId)
+        );
+    }
+
 
     public function render()
     {

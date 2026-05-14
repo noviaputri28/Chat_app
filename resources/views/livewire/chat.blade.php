@@ -12,18 +12,15 @@
             <div class="p-4 font-bold text-gray-700 border-b">
                 Users
             </div>
-            <div class="divide-y" wire:poll.5s="refreshUsers">
+            <div class="divide-y">
                 @foreach ($users as $user)
                     <div wire:click="selectUser({{ $user->id }})" class="p-3 cursor-pointer hover:bg-blue-100 transition
                     {{ $selectedUser && $selectedUser->id === $user->id ? 'bg-blue-200' : '' }}">
                         <div class="flex items-center gap-2">
                             {{-- Dot indikator online --}}
-                            <span class="w-2 h-2 rounded-full {{ $user->last_seen && $user->last_seen->gt(now()->subMinutes(1)) ? 'bg-green-500' : 'bg-gray-300' }}"></span>
+                            <span class="w-2 h-2 rounded-full {{ in_array($user->id, $onlineUsers) ? 'bg-green-500' : 'bg-gray-300' }}"></span>
                             <div class="text-gray-800">{{ $user->name }}</div>
                         </div>
-                        <!-- <div class="text-xs text-gray-500 ml-4">
-                            {{ $user->email }}
-                        </div> -->
                     </div>
                 @endforeach
             </div>
@@ -36,9 +33,6 @@
                 <div class="text-lg font-semibold text-gray-800">
                     {{ $selectedUser->name }}
                 </div>
-                <!-- <div class="text-xs text-gray-500">
-                    {{ $selectedUser->email }}
-                </div> -->
             </div>
 
             <!-- Messages -->
@@ -52,35 +46,47 @@
                 @endforeach
             </div>
 
-            <form wire:submit="submit" class="p-4 border-t bg-gray-100 flex items-center gap-2">
+            <form wire:submit.prevent="submit" class="p-4 border-t bg-gray-100 flex items-center gap-2">
                 <input
-                    wire:model="newMessage"
+                    wire:model.live="newMessage"
                     type="text"
                     class="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none text-gray-800"
                     placeholder="Type your message..." />
-                <button type="submit" 
+                <button type="submit"
                     class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-full">
                     Kirim
                 </button>
             </form>
         </div>
     </div>
+
     <script>
-    // Kirim heartbeat setiap 30 detik selama user aktif di halaman ini
-    function sendHeartbeat() {
-        fetch('/update-last-seen', {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                'Content-Type': 'application/json'
-            }
-        });
-    }
+    document.addEventListener('livewire:initialized', () => {
 
-    // Kirim saat pertama buka
-    sendHeartbeat();
+        // ✅ Presence channel — HANYA untuk online status (jangan listen event disini)
+        window.Echo.join('chat')
+            .here((users) => {
+                @this.set('onlineUsers', users.map(u => u.id));
+            })
+            .joining((user) => {
+                @this.call('userJoined', user.id);
+            })
+            .leaving((user) => {
+                @this.call('userLeft', user.id);
+            });
 
-    // Kirim setiap 30 detik
-    setInterval(sendHeartbeat, 30000);
-</script>
+        // ✅ Private channel — untuk TERIMA pesan realtime
+        window.Echo.private('chat.{{ auth()->id() }}')
+            .listen('MessageSent', (e) => {
+                console.log('pesan masuk:', e);
+                @this.call('receiveMessage', e);
+            });
+
+            Livewire.on('scroll-bottom', () => {
+                const container = document.querySelector('.overflow-y-auto');
+                if (container) container.scrollTop = container.scrollHeight;
+            });
+
+    });
+    </script>
 </div>
