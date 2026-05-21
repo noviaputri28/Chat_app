@@ -7,6 +7,7 @@ use App\Models\ChatMessage;
 use App\Events\MessageSent;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Livewire\Attributes\On;
 
 class chat extends Component
 {
@@ -19,8 +20,6 @@ class chat extends Component
 
     public function mount()
     {
-        //auth()->user()->update(['last_seen' => now()]);
-
         $this->users = User::whereNot('id', auth()->id())->latest()->get();
         $this->selectedUser = $this->users->first();
         $this->loadMessages();
@@ -31,10 +30,16 @@ class chat extends Component
     {
         $this->selectedUser = User::find($id);
         $this->loadMessages();
+        $this->dispatch('scroll-bottom');
     }
 
     public function loadMessages()
     {
+        if (!$this->selectedUser) {
+            $this->messages = collect();
+            return;
+        }
+
         $this->messages = ChatMessage::query()
             ->where(function ($q) {
                 $q->where('sender_id', Auth::id())
@@ -43,17 +48,9 @@ class chat extends Component
             ->orWhere(function ($q) {
                 $q->where('sender_id', $this->selectedUser->id)
                   ->where('receiver_id', Auth::id());
-            })->get();
-    }
-
-    public function receiveMessage(array $data): void
-    {
-        if ((int)$data['sender_id'] === Auth::id()) return;
-
-        if ($this->selectedUser && (int)$data['sender_id'] === $this->selectedUser->id) {
-            $this->loadMessages();
-            $this->dispatch('scroll-bottom'); // ← tambahkan ini
-        }
+            })
+            ->orderBy('created_at', 'asc')
+            ->get();
     }
 
     public function submit()
@@ -67,26 +64,50 @@ class chat extends Component
         ]);
 
         $message->load('sender');
-        $this->messages->push($message);
         $this->newMessage = '';
 
         broadcast(new MessageSent($message));
+
+        $this->loadMessages();
+        $this->dispatch('scroll-bottom');
     }
 
-    public function userJoined(int $userId): void
+    // Dipanggil dari JS via $wire.call() — tanpa #[On]
+    public function onOnlineUsersUpdated(array $ids): void
     {
-        if (!in_array($userId, $this->onlineUsers)) {
-            $this->onlineUsers[] = $userId;
+        // $wire.call() mengirim array langsung tanpa wrapping
+        $this->onlineUsers = array_map('intval', $ids);
+    }
+
+    // Dipanggil dari JS via $wire.call() — tanpa #[On]
+    public function onUserJoined(int $id): void
+    {
+        if (!in_array($id, $this->onlineUsers)) {
+            $this->onlineUsers[] = $id;
         }
     }
 
-    public function userLeft(int $userId): void
+    // Dipanggil dari JS via $wire.call() — tanpa #[On]
+    public function onUserLeft(int $id): void
     {
         $this->onlineUsers = array_values(
-            array_filter($this->onlineUsers, fn($id) => $id !== $userId)
+            array_filter($this->onlineUsers, fn($i) => $i !== $id)
         );
     }
 
+    // Dipanggil dari JS via $wire.call() saat pesan masuk
+    public function receiveMessage(array $data): void
+    {
+        $senderId = $data['sender_id'] ?? null;
+
+        if (!$senderId) return;
+        if ((int) $senderId === Auth::id()) return;
+
+        if ($this->selectedUser && (int) $senderId === (int) $this->selectedUser->id) {
+            $this->loadMessages();
+            $this->dispatch('scroll-bottom');
+        }
+    }
 
     public function render()
     {

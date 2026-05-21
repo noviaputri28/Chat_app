@@ -7,6 +7,8 @@
 <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
 
 <?php echo app('Illuminate\Foundation\Vite')(['resources/css/app.css', 'resources/js/app.js']); ?>
+<?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::styles(); ?>
+
 <?php echo app('flux')->fluxAppearance(); ?>
 
 <?php /**PATH C:\laragon\www\chat-app\resources\views/partials/head.blade.php ENDPATH**/ ?>

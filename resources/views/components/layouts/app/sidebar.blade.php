@@ -128,6 +128,13 @@
 
         {{ $slot }}
 
+        {{-- 
+            FIX: Hapus listener livewire:navigate yang disconnect Echo tanpa reconnect.
+            wire:navigate adalah SPA mode — Echo harus tetap hidup selama session.
+            Echo akan otomatis reconnect lewat initEcho() di echo.js.
+            Jika benar-benar perlu disconnect (misal logout), tangani di halaman masing-masing.
+        --}}
+
         @fluxScripts
     </body>
 </html>

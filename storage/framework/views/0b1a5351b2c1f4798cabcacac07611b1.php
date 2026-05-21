@@ -776,9 +776,10 @@ Settings <?php echo $__env->renderComponent(); ?>
         <?php echo e($slot); ?>
 
 
+        
+
         <?php app('livewire')->forceAssetInjection(); ?>
 <?php echo app('flux')->scripts(); ?>
 
     </body>
-</html>
-<?php /**PATH C:\laragon\www\chat-app\resources\views/components/layouts/app/sidebar.blade.php ENDPATH**/ ?>
+</html><?php /**PATH C:\laragon\www\chat-app\resources\views/components/layouts/app/sidebar.blade.php ENDPATH**/ ?>
